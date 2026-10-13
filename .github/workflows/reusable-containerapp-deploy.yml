@@ -1,0 +1,90 @@
+name: Reusable Container App Deployment
+
+on:
+  workflow_call:
+
+    inputs:
+
+      environment:
+        description: "GitHub Environment"
+        required: true
+        type: string
+
+      image_repository:
+        description: "Container image repository"
+        required: true
+        type: string
+
+      container_app_variable:
+        description: "Container App name"
+        required: true
+        type: string
+
+      image_tag:
+        description: "Image tag"
+        required: true
+        type: string
+
+
+jobs:
+
+  deploy:
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: ${{ inputs.environment }}
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+
+      - name: Azure Login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+
+      - name: Deploy Container App
+        shell: bash
+        run: |
+
+          IMAGE="${{ vars.ACR_NAME }}.azurecr.io/${{ inputs.image_repository }}:${{ inputs.image_tag }}"
+
+          echo "Target environment: ${{ inputs.environment }}"
+          echo "Resource Group: ${{ vars.AZURE_RESOURCE_GROUP }}"
+          echo "Container App: ${{ inputs.container_app_variable }}"
+          echo "Image: $IMAGE"
+
+          az containerapp update \
+            --name "${{ inputs.container_app_variable }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --image "$IMAGE" \
+            --output none
+
+
+      - name: Validate Deployment
+        shell: bash
+        run: |
+
+          EXPECTED_IMAGE="${{ vars.ACR_NAME }}.azurecr.io/${{ inputs.image_repository }}:${{ inputs.image_tag }}"
+
+          DEPLOYED_IMAGE=$(az containerapp show \
+            --name "${{ inputs.container_app_variable }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "properties.template.containers[0].image" \
+            --output tsv)
+
+          echo "Expected : $EXPECTED_IMAGE"
+          echo "Actual   : $DEPLOYED_IMAGE"
+
+          if [[ "$DEPLOYED_IMAGE" != "$EXPECTED_IMAGE" ]]; then
+            echo "::error::Deployment validation failed"
+            exit 1
+          fi
+
+          echo "Deployment successful"

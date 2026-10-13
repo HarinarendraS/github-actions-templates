@@ -9,6 +9,11 @@ on:
         required: true
         type: string
 
+      runner_label:
+        description: "GitHub self-hosted runner label"
+        required: true
+        type: string
+
       image_tag:
         description: "Container image tag"
         required: true
@@ -21,7 +26,19 @@ jobs:
 
     name: Deploy - ${{ inputs.environment }}
 
-    runs-on: ubuntu-latest
+    # ============================================
+    # Self-Hosted Runner Selection
+    # ============================================
+
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - ${{ inputs.runner_label }}
+
+    # ============================================
+    # GitHub Environment
+    # ============================================
 
     environment:
       name: ${{ inputs.environment }}
@@ -37,7 +54,21 @@ jobs:
       IMAGE_REPOSITORY: ${{ vars.GRAFANA_IMAGE_REPOSITORY }}
       IMAGE_TAG: ${{ inputs.image_tag }}
 
+
     steps:
+
+      # ============================================
+      # Runner Information
+      # ============================================
+
+      - name: Display Runner Information
+        shell: bash
+        run: |
+          echo "Runner Name        : $RUNNER_NAME"
+          echo "Runner OS          : $RUNNER_OS"
+          echo "Runner Architecture: $RUNNER_ARCH"
+          echo "Runner Label       : ${{ inputs.runner_label }}"
+
 
       # ============================================
       # Azure Login
@@ -145,7 +176,7 @@ jobs:
 
 
       # ============================================
-      # Build Target Image Name
+      # Build Target Image
       # ============================================
 
       - name: Build Target Image
@@ -162,7 +193,7 @@ jobs:
 
 
       # ============================================
-      # Deploy
+      # Deployment
       # ============================================
 
       - name: Deploy Container Image
@@ -245,6 +276,8 @@ jobs:
             echo "| Property | Value |"
             echo "|---|---|"
             echo "| Environment | ${{ inputs.environment }} |"
+            echo "| Runner | $RUNNER_NAME |"
+            echo "| Runner Label | ${{ inputs.runner_label }} |"
             echo "| Resource Group | $AZURE_RESOURCE_GROUP |"
             echo "| Container App | $CONTAINER_APP_NAME |"
             echo "| ACR | $ACR_NAME |"

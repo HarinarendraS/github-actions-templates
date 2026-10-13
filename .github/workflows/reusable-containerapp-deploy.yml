@@ -2,33 +2,22 @@ name: Reusable Container App Deployment
 
 on:
   workflow_call:
-
     inputs:
-
       environment:
-        description: "GitHub Environment"
-        required: true
-        type: string
-
-      image_repository:
-        description: "Container image repository"
-        required: true
-        type: string
-
-      container_app_name:
-        description: "Container App name"
+        description: "GitHub deployment environment"
         required: true
         type: string
 
       image_tag:
-        description: "Image tag"
+        description: "Container image tag"
         required: true
         type: string
-
 
 jobs:
 
   deploy:
+
+    name: Deploy - ${{ inputs.environment }}
 
     runs-on: ubuntu-latest
 
@@ -48,33 +37,51 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-
-      - name: Deploy Container App
+      - name: Display Deployment Configuration
         shell: bash
         run: |
+          echo "Environment      : ${{ inputs.environment }}"
+          echo "Resource Group   : ${{ vars.AZURE_RESOURCE_GROUP }}"
+          echo "Container App    : ${{ vars.CONTAINER_APP_NAME }}"
+          echo "ACR              : ${{ vars.ACR_NAME }}"
+          echo "Image Repository : ${{ vars.IMAGE_REPOSITORY }}"
+          echo "Image Tag        : ${{ inputs.image_tag }}"
 
-          IMAGE="${{ vars.ACR_NAME }}.azurecr.io/${{ inputs.image_repository }}:${{ inputs.image_tag }}"
+      - name: Capture Current Image
+        shell: bash
+        run: |
+          CURRENT_IMAGE=$(az containerapp show \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "properties.template.containers[0].image" \
+            --output tsv)
 
-          echo "Target environment: ${{ inputs.environment }}"
-          echo "Resource Group: ${{ vars.AZURE_RESOURCE_GROUP }}"
-          echo "Container App: ${{ inputs.container_app_variable }}"
-          echo "Image: $IMAGE"
+          echo "Current image: $CURRENT_IMAGE"
+
+      - name: Deploy Image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IMAGE="${{ vars.ACR_NAME }}.azurecr.io/${{ vars.IMAGE_REPOSITORY }}:${{ inputs.image_tag }}"
+
+          echo "Deploying: $IMAGE"
 
           az containerapp update \
-            --name "${{ inputs.container_app_variable }}" \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --image "$IMAGE" \
             --output none
 
-
       - name: Validate Deployment
         shell: bash
         run: |
+          set -euo pipefail
 
-          EXPECTED_IMAGE="${{ vars.ACR_NAME }}.azurecr.io/${{ inputs.image_repository }}:${{ inputs.image_tag }}"
+          EXPECTED_IMAGE="${{ vars.ACR_NAME }}.azurecr.io/${{ vars.IMAGE_REPOSITORY }}:${{ inputs.image_tag }}"
 
           DEPLOYED_IMAGE=$(az containerapp show \
-            --name "${{ inputs.container_app_variable }}" \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --query "properties.template.containers[0].image" \
             --output tsv)

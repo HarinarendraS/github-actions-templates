@@ -15,7 +15,7 @@ on:
         required: true
         type: string
 
-      container_app_variable:
+      container_app_name:
         description: "Container App name"
         required: true
         type: string
